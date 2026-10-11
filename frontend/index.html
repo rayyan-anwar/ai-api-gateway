@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI API Gateway console — Rayyan Anwar</title>
+<style>
+:root{--bg:#f2f5f7;--surface:#fff;--ink:#14202b;--muted:#52606d;--rule:#d5dde3;--accent:#0b6e7f;--accent-ink:#fff;--err:#a61b1b;--ok:#17613a}
+@media (prefers-color-scheme:dark){:root{--bg:#10171d;--surface:#18222b;--ink:#e8eef2;--muted:#9fb0bd;--rule:#2b3945;--accent:#5cc2d3;--accent-ink:#06222a;--err:#ff8c8c;--ok:#7fd8a6}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.7rem;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:0 0 8px}
+p.lede{color:var(--muted);margin:0 0 20px;max-width:68ch}
+section{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:16px;margin:0 0 16px}
+label{display:block;font-weight:600;margin:10px 0 4px}
+select,input,textarea,button{font:inherit;color:inherit}
+select,input[type=password],textarea{width:100%;max-width:560px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--bg)}
+textarea{min-height:110px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+button{padding:9px 16px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;cursor:pointer}
+button.secondary{background:transparent;color:var(--accent)}
+button:disabled{opacity:.55;cursor:wait}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.status{min-height:1.5em;margin:10px 0 0;color:var(--muted)}
+.status.error{color:var(--err);font-weight:600}
+.out{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--rule);padding:10px;border-radius:4px;margin-top:10px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:12px 0 0}
+dt{color:var(--muted)} dd{margin:0;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:520px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left}
+td:last-child,th:last-child{text-align:right}
+footer{color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<h1>AI API Gateway console</h1>
+<p class="lede">Send a request through the gateway, see which provider answered and whether a fallback was used, then check the usage counters.</p>
+
+<section aria-labelledby="send-h">
+  <h2 id="send-h">Send a request</h2>
+  <label for="key">API key (only needed if the gateway has keys configured; kept in this page's memory only)</label>
+  <input id="key" type="password" autocomplete="off">
+  <div class="row">
+    <div><label for="model">Model alias</label><select id="model"></select></div>
+    <button id="reload" class="secondary" type="button">Reload models</button>
+  </div>
+  <label for="text">Message</label>
+  <textarea id="text">The new cache layer cut our response time in half. Engineers reported that deployments are smoother. The monitoring dashboards were also easy to read. Overall the team is pleased with the results and plans to extend the cache to other services.</textarea>
+  <div class="row"><button id="send">Send</button></div>
+  <p class="status" id="status" role="status">Choose a model and send a message.</p>
+  <div class="out" id="content" hidden></div>
+  <dl id="meta" hidden></dl>
+</section>
+
+<section aria-labelledby="m-h">
+  <h2 id="m-h">Usage metrics</h2>
+  <button id="refresh" class="secondary" type="button">Refresh metrics</button>
+  <p class="status" id="mstatus" role="status">No metrics loaded yet.</p>
+  <div class="scroll"><table id="mtable" hidden><thead><tr><th>Counter</th><th>Labels</th><th>Value</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<footer>
+  <p><strong>About.</strong> Built by Rayyan Anwar (AI/ML Engineer | Researcher | Technology Manager | Software Developer). Counters live in memory and reset on restart. MIT licence. © Rayyan Anwar.</p>
+</footer>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+function headers() { const h = {"Content-Type": "application/json"}; const k = $("key").value.trim(); if (k) h["Authorization"] = "Bearer " + k; return h; }
+async function call(path, body) {
+  const res = await fetch(path, body === undefined ? {headers: headers()} : {method: "POST", headers: headers(), body: JSON.stringify(body)});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    let msg = (data.error && data.error.message) || "Request failed (" + res.status + ")";
+    if (res.status === 429) msg += " Retry after " + (res.headers.get("Retry-After") || "?") + " s.";
+    if (data.error && data.error.details && data.error.details.attempts) msg += " Attempts: " + data.error.details.attempts.map(a => a.provider + ":" + a.outcome).join(", ");
+    throw new Error(msg);
+  }
+  data.__remaining = res.headers.get("X-RateLimit-Remaining");
+  return data;
+}
+function setStatus(id, text, isError) { const e = $(id); e.textContent = text; e.className = "status" + (isError ? " error" : ""); }
+async function loadModels() {
+  try {
+    const d = await call("/v1/models"); const sel = $("model"); while (sel.firstChild) sel.removeChild(sel.firstChild);
+    for (const m of d.data) { const o = document.createElement("option"); o.value = m.model; o.textContent = m.model; sel.appendChild(o); }
+    setStatus("status", d.data.length + " model aliases available.");
+  } catch (e) { setStatus("status", e.message, true); }
+}
+function addMeta(dl, k, v) { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = String(v); dl.append(dt, dd); }
+$("send").onclick = async () => {
+  const btn = $("send"); btn.disabled = true; setStatus("status", "Sending…");
+  try {
+    const d = await call("/v1/chat", {model: $("model").value, messages: [{role: "user", content: $("text").value}]});
+    const c = $("content"); c.textContent = d.content; c.hidden = false;
+    const dl = $("meta"); while (dl.firstChild) dl.removeChild(dl.firstChild);
+    addMeta(dl, "Provider", d.provider + " (" + d.upstream_model + ")"); addMeta(dl, "Fallback used", d.fallback_used);
+    addMeta(dl, "Latency", d.latency_ms + " ms");
+    addMeta(dl, "Tokens", d.usage.total_tokens + (d.usage.estimated ? " (estimated)" : ""));
+    if (d.__remaining !== null) addMeta(dl, "Rate limit remaining", d.__remaining);
+    dl.hidden = false; setStatus("status", "Done.");
+  } catch (e) { setStatus("status", e.message, true); $("content").hidden = true; $("meta").hidden = true; } finally { btn.disabled = false; }
+};
+$("refresh").onclick = async () => {
+  try {
+    const d = await call("/api/metrics"); const body = $("mtable").querySelector("tbody"); while (body.firstChild) body.removeChild(body.firstChild);
+    for (const c of d.counters) { const tr = document.createElement("tr"); for (const t of [c.name, Object.entries(c.labels).map(([k, v]) => k + "=" + v).join(" "), c.value]) { const td = document.createElement("td"); td.textContent = t; tr.appendChild(td); } body.appendChild(tr); }
+    $("mtable").hidden = d.counters.length === 0; setStatus("mstatus", d.counters.length ? "Uptime " + d.uptime_s + " s." : "No requests recorded yet. Send one above.");
+  } catch (e) { setStatus("mstatus", e.message, true); }
+};
+$("reload").onclick = loadModels;
+loadModels();
+</script>
+</body>
+</html>

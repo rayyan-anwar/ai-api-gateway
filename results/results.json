@@ -1,0 +1,59 @@
+{
+  "created_utc": "2026-10-10T15:54:55+00:00",
+  "environment": {
+    "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "cpu_count": 1
+  },
+  "latency_throughput": {
+    "sequential_requests": 300,
+    "latency_ms": {
+      "p50": 0.1781629999868528,
+      "p95": 0.25839899998914007,
+      "p99": 0.4425100000275961,
+      "mean": 0.19007189333422048
+    },
+    "concurrent_requests": 400,
+    "concurrency": 50,
+    "requests_per_s": 8762.525098607503
+  },
+  "rate_limiter": {
+    "burst": 10,
+    "rate_per_min": 60,
+    "immediate_30_allowed": 10,
+    "immediate_expected": 10,
+    "after_5s_10_attempts_allowed": 5,
+    "after_5s_expected": 5,
+    "exact_match": true
+  },
+  "fallback": {
+    "requests": 100,
+    "succeeded": 100,
+    "fallback_used": 100,
+    "primary_calls": 100
+  },
+  "timeout": {
+    "configured_timeout_s": 0.1,
+    "provider_delay_s": 2.0,
+    "status": 504,
+    "elapsed_s": 0.10053054600001587
+  },
+  "sentiment_sanity": {
+    "n": 28,
+    "accuracy": 0.9642857142857143,
+    "confusion": {
+      "positive->positive": 12,
+      "negative->negative": 11,
+      "negative->neutral": 1,
+      "neutral->neutral": 4
+    },
+    "errors": [
+      {
+        "text": "It does not work and support never replied.",
+        "expected": "negative",
+        "predicted": "neutral"
+      }
+    ],
+    "caveat": "28 author-written sentences; sanity check only, not a benchmark."
+  }
+}

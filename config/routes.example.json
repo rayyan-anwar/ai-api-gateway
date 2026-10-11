@@ -1,0 +1,11 @@
+{
+  "routes": [
+    {"model": "summarize", "targets": [{"provider": "local", "model": "local/summarizer"}]},
+    {"model": "sentiment", "targets": [{"provider": "local", "model": "local/sentiment"}]},
+    {"model": "assistant", "targets": [
+      {"provider": "openai_compat", "model": "YOUR_UPSTREAM_MODEL"},
+      {"provider": "anthropic", "model": "YOUR_UPSTREAM_MODEL"},
+      {"provider": "local", "model": "local/summarizer"}
+    ]}
+  ]
+}
